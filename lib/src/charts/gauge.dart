@@ -366,7 +366,7 @@ class BulletChart implements Renderable {
   String toString() => render();
 }
 
-/// A fraction's length in eighths of a cell across [cells] cells.
+/// A fraction's length in eighths of a cell, across a given number of cells.
 ///
 /// A full reading must fill every cell and an empty one must fill none, exactly.
 /// Without the epsilon, `(0.9999999 * 20 * 8).floor()` leaves the last eighth

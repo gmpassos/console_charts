@@ -86,7 +86,7 @@ class LineChart implements Renderable {
   /// Whether to interpolate the series through a monotone cubic before drawing.
   ///
   /// Smooths the staircase a coarse grid produces, without the overshoot a natural
-  /// spline would add — see [monotoneCubic].
+  /// spline would add — see [monotoneResample].
   final bool smooth;
 
   /// Whether to fill the area between the line and the baseline.

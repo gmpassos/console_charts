@@ -121,7 +121,7 @@ List<String> renderRowFrame({
   return out;
 }
 
-/// Draws a bar [cells] wide plus a fractional tip, on row [y] of [canvas].
+/// Draws a bar of whole cells plus a fractional tip, on row [y] of [canvas].
 ///
 /// [eighths] is the length in eighths of a cell, as [LinearScale.quantityEighths]
 /// produces. Whole cells are filled with [CharSet.full] and the remainder becomes

@@ -8,7 +8,7 @@ library;
 
 /// How many terminal columns [text] occupies.
 ///
-/// Supply your own to [DisplayWidth.custom] if the built-in rules are not enough
+/// Supply your own to `DisplayWidth.custom` if the built-in rules are not enough
 /// for your data — see [measureWidth] for exactly what the default covers.
 typedef WidthFn = int Function(String text);
 
@@ -17,7 +17,7 @@ typedef WidthFn = int Function(String text);
 /// Defaults to [measureWidth]. The indirection exists because full Unicode width
 /// handling needs grapheme-cluster segmentation, which needs a dependency this
 /// package deliberately does not have; see [measureWidth] for the consequence and
-/// [DisplayWidth.custom] for the escape hatch.
+/// `DisplayWidth.custom` for the escape hatch.
 extension type const DisplayWidth(WidthFn measure) {
   /// The built-in rules: [measureWidth].
   static const DisplayWidth standard = DisplayWidth(measureWidth);
@@ -62,7 +62,7 @@ int _asciiWidth(String text) => text.length;
 /// the result over-measures even though every individual rule above is applied
 /// correctly. Getting that right requires grapheme segmentation, which means a
 /// dependency; this package has none by design. If your labels contain such
-/// sequences, pass a [DisplayWidth.custom] backed by `package:characters`.
+/// sequences, pass a `DisplayWidth.custom` backed by `package:characters`.
 ///
 /// Control characters count 0, which is a measurement rather than an endorsement:
 /// a chart should not be fed them, because a terminal's response to one is its own

@@ -16,7 +16,7 @@ import 'style.dart';
 class Plot {
   /// Creates a plot over [canvas] using [xScale] and [yScale].
   ///
-  /// The scales should already be sized to the canvas; [PlotFrame] does that.
+  /// The scales should already be sized to the canvas; `renderPlotFrame` does that.
   Plot(this.canvas, this.xScale, this.yScale, this.chars);
 
   /// The surface drawn onto.

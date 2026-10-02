@@ -18,8 +18,17 @@ library;
 ///   both unreadable and wide.
 /// * Otherwise decimals scale with magnitude — more precision for small numbers,
 ///   less for large — and trailing zeros are dropped.
+/// There is deliberately **no `value is int` fast path** here.
+///
+/// It would make this function platform-dependent. On the VM `is int` means "boxed
+/// as an int"; compiled to JavaScript every number is a double and `is int` means
+/// "integral-valued" — so `1.2e9 is int` and even `double.infinity is int` are both
+/// *true* in a browser. The fast path therefore returned `1200000000` and
+/// `Infinity` on the web where the VM gave `1.2e+9` and `∞`, which means the same
+/// chart would label its axis differently depending on where it ran.
+///
+/// Routing everything through `toDouble` costs nothing and is identical on both.
 String formatAuto(num value) {
-  if (value is int) return '$value';
   final v = value.toDouble();
   if (v.isNaN) return 'NaN';
   if (v.isInfinite) return v.isNegative ? '-∞' : '∞';

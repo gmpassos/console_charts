@@ -1,0 +1,102 @@
+name: Dart CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - name: Dart version
+        run: |
+          dart --version
+          uname -a
+      - name: Install dependencies
+        run: dart pub get
+      - name: dart format
+        run: dart format -o none --set-exit-if-changed .
+      - name: dart analyze
+        run: dart analyze --fatal-infos --fatal-warnings .
+      - name: dependency_validator
+        run: dart run dependency_validator
+      - name: dart doc
+        run: dart doc --dry-run
+      - name: dart pub publish --dry-run
+        run: dart pub publish --dry-run
+
+  test_vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - name: Dart version
+        run: |
+          dart --version
+          uname -a
+      - name: Install dependencies
+        run: dart pub get
+      - name: Run tests (VM)
+        run: dart test --platform vm --coverage=./coverage
+      - name: Generate coverage report
+        run: |
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage --packages=.dart_tool/package_config.json --report-on=lib --lcov -o ./coverage/lcov.info -i ./coverage
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          directory: ./coverage/
+          flags: unittests
+          env_vars: OS,DART
+          fail_ci_if_error: false
+          verbose: true
+
+  # The package's central promise is that it does not touch `dart:io` and therefore
+  # runs on the web, so the suite is run compiled to JavaScript in a real browser.
+  # That is a much stronger check than the grep in test/platform_test.dart: it
+  # compiles and executes every chart, and it catches semantic divergences a static
+  # check cannot see.
+  #
+  # It has already earned this job twice. `value is int` means "boxed as an int" on
+  # the VM but "integral-valued" under dart2js, where `1.2e9 is int` and even
+  # `double.infinity is int` are both true — so number formatting silently differed
+  # between a CLI and a browser. Only this job found it.
+  #
+  # Three VM-only tests self-skip here (`@TestOn('vm')`), which is why the count is
+  # lower than the VM job's.
+  test_browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - name: Dart version
+        run: |
+          dart --version
+          uname -a
+      - name: Install dependencies
+        run: dart pub get
+      - name: Run tests (Chrome, compiled to JavaScript)
+        run: dart test --platform chrome
+
+  # Proves the published example — not just the library — compiles for the web, which
+  # is what a user actually does first.
+  compile_js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - name: Install dependencies
+        run: dart pub get
+      # A real output path, not /dev/null: `dart compile js` also writes sidecar
+      # `.deps` and `.map` files beside its target.
+      - name: Compile the example to JavaScript
+        run: dart compile js -o "${RUNNER_TEMP}/example.js" example/console_charts_example.dart

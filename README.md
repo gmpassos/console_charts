@@ -1,5 +1,16 @@
 # console_charts
 
+[![pub package](https://img.shields.io/pub/v/console_charts.svg?logo=dart&logoColor=00b9fc)](https://pub.dev/packages/console_charts)
+[![Null Safety](https://img.shields.io/badge/null-safety-brightgreen)](https://dart.dev/null-safety)
+[![Dart CI](https://github.com/gmpassos/console_charts/actions/workflows/dart.yml/badge.svg?branch=main)](https://github.com/gmpassos/console_charts/actions/workflows/dart.yml)
+[![codecov](https://codecov.io/gh/gmpassos/console_charts/branch/main/graph/badge.svg)](https://codecov.io/gh/gmpassos/console_charts)
+[![GitHub Tag](https://img.shields.io/github/v/tag/gmpassos/console_charts?logo=git&logoColor=white)](https://github.com/gmpassos/console_charts/releases)
+[![New Commits](https://img.shields.io/github/commits-since/gmpassos/console_charts/latest?logo=git&logoColor=white)](https://github.com/gmpassos/console_charts/network)
+[![Last Commits](https://img.shields.io/github/last-commit/gmpassos/console_charts?logo=git&logoColor=white)](https://github.com/gmpassos/console_charts/commits/main)
+[![Pull Requests](https://img.shields.io/github/issues-pr/gmpassos/console_charts?logo=github&logoColor=white)](https://github.com/gmpassos/console_charts/pulls)
+[![Code size](https://img.shields.io/github/languages/code-size/gmpassos/console_charts?logo=github&logoColor=white)](https://github.com/gmpassos/console_charts)
+[![License](https://img.shields.io/github/license/gmpassos/console_charts?logo=open-source-initiative&logoColor=green)](https://github.com/gmpassos/console_charts/blob/main/LICENSE)
+
 Charts for the console and terminal, rendered as plain text.
 
 No `dart:io`, so it works on the web too. No dependencies.
@@ -234,6 +245,42 @@ Known limits, stated rather than hidden:
   nothing (use `ColumnChart`, which has a baseline row) and downward column fills
   quantize to whole cells.
 
+## Running the example and tests
+
+```sh
+dart pub get
+dart analyze
+dart test
+dart run example/console_charts_example.dart
+```
+
+The suite also runs compiled to JavaScript, which is how the web-safety claim is
+actually checked rather than merely asserted:
+
+```sh
+dart test -p chrome
+```
+
+Three tests self-skip there (`@TestOn('vm')` — they read `lib/` from disk to prove no
+file imports `dart:io`), so the browser count is lower than the VM's.
+
+That job is not ceremonial. It caught a real divergence: `value is int` means "boxed
+as an int" on the VM but "integral-valued" under dart2js, where both `1.2e9 is int`
+and `double.infinity is int` are true — so axis labels silently differed between a
+CLI and a browser. Nothing else would have found it.
+
+CI runs format, `analyze --fatal-infos --fatal-warnings`, `dependency_validator`,
+`dart doc`, `pub publish --dry-run`, the VM suite with coverage, the browser suite,
+and a JavaScript compile of the example.
+
+# Author
+
+Graciliano M. Passos: [gmpassos@GitHub][github].
+
+[github]: https://github.com/gmpassos
+
 ## License
 
-Apache-2.0.
+[Apache License - Version 2.0][apache_license]
+
+[apache_license]: https://www.apache.org/licenses/LICENSE-2.0.txt
