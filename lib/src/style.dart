@@ -190,7 +190,7 @@ class AnsiStyle {
   /// The reset is unconditional rather than an attempt to restore what was
   /// previously in effect, because a chart cannot know the surrounding state and a
   /// style that leaked would colour whatever the caller printed next.
-  String apply(String text) => isEmpty ? text : '$escape$text$reset';
+  String apply(String text) => isEmpty ? text : '$escape$text$ansiReset';
 
   /// This style with the given attributes replaced.
   AnsiStyle copyWith({
@@ -237,7 +237,11 @@ class AnsiStyle {
 const String _csi = '\x1b[';
 
 /// The sequence that clears all styling: `CSI 0 m`.
-const String reset = '${_csi}0m';
+///
+/// Named `ansiReset` rather than `reset` because it is exported into the importing
+/// library's namespace, where a bare `reset` is both ambiguous and likely to collide
+/// with something the caller already has.
+const String ansiReset = '${_csi}0m';
 
 /// [text] with every ANSI escape sequence removed.
 ///

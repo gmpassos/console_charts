@@ -159,7 +159,7 @@ void main() {
     test('resets at the end of a styled row so nothing leaks', () {
       final c = Canvas(3, 1)
         ..hLine(0, 0, 3, '#', style: const AnsiStyle.of(AnsiColor.red));
-      expect(c.render(color: true), endsWith(reset));
+      expect(c.render(color: true), endsWith(ansiReset));
     });
 
     test('emits a new escape only when the style changes', () {

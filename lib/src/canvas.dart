@@ -271,13 +271,13 @@ class Canvas {
         for (var i = y * width; i <= last; i++) {
           final s = _styles![i];
           if (s != open) {
-            if (open != null) row.write(reset);
+            if (open != null) row.write(ansiReset);
             if (s != null) row.write(s.escape);
             open = s;
           }
           row.write(_glyphs[i]);
         }
-        if (open != null) row.write(reset);
+        if (open != null) row.write(ansiReset);
       } else {
         for (var i = y * width; i <= last; i++) {
           row.write(_glyphs[i]);

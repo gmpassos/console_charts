@@ -81,8 +81,7 @@ export 'src/layout.dart'
         rule,
         vstack;
 export 'src/plot.dart' show Plot, lineGlyphs;
-export 'src/plot_frame.dart'
-    show AxisInsets, Axes, indexScale, levelsFor, renderPlotFrame;
+export 'src/plot_frame.dart' show AxisInsets, Axes, levelsFor, renderPlotFrame;
 export 'src/renderable.dart' show Renderable;
 export 'src/row_frame.dart' show drawBarEighths, renderRowFrame;
 export 'src/resample.dart'
@@ -107,7 +106,7 @@ export 'src/series.dart' show DataPoint, Series, XYSeries;
 export 'src/smooth.dart' show monotoneResample;
 export 'src/stats.dart'
     show BoxStats, HistogramBin, finiteSorted, histogramBins, quantile;
-export 'src/style.dart' show AnsiColor, AnsiStyle, reset, stripAnsi;
+export 'src/style.dart' show AnsiColor, AnsiStyle, ansiReset, stripAnsi;
 export 'src/theme.dart' show ChartTheme, NumberFormatter;
 export 'src/width.dart'
     show

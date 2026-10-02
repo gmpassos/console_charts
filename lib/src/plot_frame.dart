@@ -366,6 +366,3 @@ List<String> renderPlotFrame({
 List<int> levelsFor(List<num?> values, LinearScale scale) => [
   for (final v in values) scale.pointCell(v),
 ];
-
-/// Convenience for the x scale of a series plotted against its own indices.
-LinearScale indexScale(int count) => LinearScale.index(count, 1);
