@@ -4,7 +4,8 @@ description: >-
   and bar charts, gauges, heatmaps and dashboards. No dart:io, so it works on the
   web too, and no dependencies.
 version: 0.1.0
-repository: https://github.com/omnyGrid/console_charts
+repository: https://github.com/gmpassos/console_charts
+issue_tracker: https://github.com/gmpassos/console_charts/issues
 
 topics:
   - charts
