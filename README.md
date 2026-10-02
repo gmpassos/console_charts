@@ -51,6 +51,8 @@ void main() {
 | **Finance** | `CandlestickChart`, `WaterfallChart` |
 | **Grids** | `Heatmap`, `CalendarHeatmap` |
 | **Layout** | `Panel`, `Dashboard`, `Table`, `rule`, `hstack`, `vstack` |
+| **Live data** | `RingSeries` |
+| **Annotations** | `ReferenceLine`, `EventMarker` |
 
 Run `dart run example/console_charts_example.dart` for a gallery of all of them.
 
@@ -99,6 +101,99 @@ sparkline([5, 6, 7, null, null, 7, 6, 5]);  // ▁▅█  █▅▁
 The one deliberate exception, documented where it happens: in a **stacked** bar a
 missing value counts as zero, because a stack is a composition and an absent part
 contributes nothing.
+
+## A log axis, for anything that decays
+
+A series that falls by *factors* — a training loss, a latency tail — spends most of
+its length squashed into the bottom row of a linear chart, so a plateau in the tail
+is invisible. On a log axis a constant decay rate is a straight line and a plateau is
+a visible bend:
+
+```dart
+LineChart.of(loss, width: 60, height: 9, logY: true);
+```
+
+```text
+linear y — the tail is one flat row        log y — the same data
+3 ┤                                           10 ┤
+  │╮                                             │────╮
+2 ┤╰─╮                                           │    ╰──────────╮
+  │  ╰─╮                                     0.1 ┤               ╰──────────╮
+1 ┤    ╰──╮                                      │                          ╰───
+  │       ╰───╮                                  │
+0 ┼           ╰──────────────────────      0.001 ┤
+```
+
+Values at or below zero are *off* a log axis rather than at the bottom of it, so they
+render as gaps. On a multiplicative scale a zero is not a small number.
+
+## Braille, for 8× the resolution
+
+`LineStyle.braille` plots into a 2×4 dot grid per cell — twice the horizontal and four
+times the vertical resolution, same space. Better for *shape*, worse for reading a
+value off a row, and opt-in because font coverage is good but not universal:
+
+```text
+braille, 8 rows                   glyph, same 8 rows
+3 ┤                               3 ┤
+  │⠢⡀                               │╮
+2 ┤ ⠈⠢⡀                           2 ┤╰─╮
+  │   ⠈⠒⢄                           │  ╰──╮
+1 ┤      ⠉⠒⠤⣀                     1 ┤     ╰────╮
+  │          ⠉⠑⠒⠤⢄⣀⡀                │          ╰─────────╮
+0 ┼                ⠈⠉⠉⠒⠒⠢⠤⠤⢄⣀⣀⣀   0 ┼                    ╰──────────
+```
+
+## Annotations
+
+A curve says what happened; an annotation says *compared with what*.
+
+```dart
+LineChart.of(
+  data,
+  width: 60, height: 10,
+  references: [ReferenceLine(80, label: 'target')],
+  markers: [EventMarker(4, label: 'grew')],
+  xCaption: ('step 0', 'step 2000'),
+);
+```
+
+`EventMarker` takes an index in **data** space, so it stays attached to its event when
+the chart is resampled to a different width, and it draws only into empty cells so it
+never erases the series. `xCaption` labels the two ends of an index axis, which is the
+only place an index axis is meaningful — spread tick labels would imply the samples
+are evenly spaced in time.
+
+## Live data
+
+Charts in a console usually watch something *happen*, which means appending a value
+per tick forever. `RingSeries` is bounded:
+
+```dart
+final loss = RingSeries(capacity: 512);
+for (final step in steps) {
+  loss.add(step.loss);
+  print(sparkline(loss.values));
+}
+```
+
+Two strategies, and the difference is real rather than cosmetic:
+
+| | |
+| --- | --- |
+| `RingDecimation.drop` | the last N ticks at full resolution — what "live" means. Default. |
+| `RingDecimation.fold` | the *whole* history at falling resolution, folding four samples into their min and max, so no spike is ever averaged away |
+
+`fold` sounds strictly better and is not: a preserved outlier keeps setting the scale
+forever, so recent detail flattens against it. 5000 samples into a capacity of 64:
+
+```text
+drop: max 16.1   █████▇▇▇▇▇▇▆▆▆▆▆▆▅▅▅▅▅▅▄▄▄▄▄▄▃▃▃▃▃▂▂▂▂▂▁▁▁▁▁
+fold: max 134.4  ▁█▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁
+```
+
+The spike survives `fold` and is lost to `drop`; everything else is legible under
+`drop` and flat under `fold`. Pick by the question you are asking.
 
 ## Character sets
 
