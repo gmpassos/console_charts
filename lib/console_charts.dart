@@ -34,6 +34,7 @@ export 'src/charset.dart' show CharSet, CharSets, levelGlyph, partialGlyph;
 export 'src/charts/bar_chart.dart' show BarChart, BarMode;
 export 'src/charts/gauge.dart'
     show BulletChart, Gauge, GaugeRow, ProgressBar, drawGauge;
+export 'src/charts/line_chart.dart' show AreaChart, LineChart;
 export 'src/charts/sparkline.dart'
     show SparklineGroup, drawSparkline, sparkline;
 export 'src/format.dart'
@@ -44,6 +45,9 @@ export 'src/format.dart'
         formatFixed,
         formatPercent,
         formatWithUnit;
+export 'src/plot.dart' show Plot, lineGlyphs;
+export 'src/plot_frame.dart'
+    show AxisInsets, Axes, indexScale, levelsFor, renderPlotFrame;
 export 'src/renderable.dart' show Renderable;
 export 'src/row_frame.dart' show drawBarEighths, renderRowFrame;
 export 'src/resample.dart'
@@ -65,6 +69,7 @@ export 'src/scale.dart'
         niceBounds,
         niceStep;
 export 'src/series.dart' show DataPoint, Series, XYSeries;
+export 'src/smooth.dart' show monotoneResample;
 export 'src/style.dart' show AnsiColor, AnsiStyle, reset, stripAnsi;
 export 'src/theme.dart' show ChartTheme, NumberFormatter;
 export 'src/width.dart'

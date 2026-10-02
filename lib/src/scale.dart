@@ -38,7 +38,11 @@ class NiceStep {
   final int exponent;
 
   /// How many decimal places a label at this step needs.
-  int get decimals => exponent >= 0 ? 0 : -exponent;
+  ///
+  /// Capped at 20, which is the most `toStringAsFixed` accepts — a domain around
+  /// `1e-300` otherwise asks for 300 decimals and throws a `RangeError` from deep
+  /// inside label formatting, a long way from the data that caused it.
+  int get decimals => exponent >= 0 ? 0 : (-exponent).clamp(0, 20);
 
   @override
   String toString() => 'NiceStep($value, 1e$exponent)';

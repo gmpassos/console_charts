@@ -39,12 +39,18 @@ String formatAuto(num value) {
 ///
 /// Use when a column of numbers must line up on the decimal point; [formatAuto]
 /// strips zeros and so produces ragged columns.
-NumberFormat formatFixed(int digits) => (num v) {
-  final d = v.toDouble();
-  if (d.isNaN) return 'NaN';
-  if (d.isInfinite) return d.isNegative ? '-∞' : '∞';
-  return d.toStringAsFixed(digits);
-};
+///
+/// [digits] is clamped to the 0..20 that `toStringAsFixed` accepts, so a caller
+/// computing it from data cannot turn an extreme magnitude into a `RangeError`.
+NumberFormat formatFixed(int digits) {
+  final safe = digits.clamp(0, 20);
+  return (num v) {
+    final d = v.toDouble();
+    if (d.isNaN) return 'NaN';
+    if (d.isInfinite) return d.isNegative ? '-∞' : '∞';
+    return d.toStringAsFixed(safe);
+  };
+}
 
 /// A short label using a magnitude suffix: `1.2k`, `3.4M`, `5G`.
 ///

@@ -300,8 +300,8 @@ class BarChart implements Renderable {
             }(),
         ];
         final rowSum = weights.fold<double>(0, (a, b) => a + b);
-        if (!(rowSum > 0))
-          return; // an empty row stays empty, not 100% of series 0
+        // An empty row stays empty rather than becoming 100% of series 0.
+        if (!(rowSum > 0)) return;
 
         // How many cells this row's stack occupies. In percent mode always the
         // whole width; otherwise proportional to the widest row.

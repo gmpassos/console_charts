@@ -227,7 +227,7 @@ void main() {
           expect(
             measureWidth(line),
             width,
-            reason: 'width $width gave "${line}"',
+            reason: 'width $width gave "$line"',
           );
         }
       }
