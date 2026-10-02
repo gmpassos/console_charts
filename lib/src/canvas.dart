@@ -56,18 +56,48 @@ class Canvas {
 
   bool _inside(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
 
+  /// A cell covered by the second half of a double-width glyph.
+  ///
+  /// Holds the empty string, so it contributes nothing to the rendered row while
+  /// still occupying a grid position. Without this a wide glyph would be followed
+  /// by the fill character and `日本` would render as `日 本` — three columns of
+  /// terminal for two cells of grid, and every subsequent column misaligned.
+  static const String continuation = '';
+
   /// Writes [glyph] at ([x], [y]), ignoring positions outside the canvas.
   ///
   /// [glyph] should be a single character. A longer string is stored as-is and
   /// will widen the row, which is occasionally useful and usually a bug — prefer
   /// [drawText].
+  ///
+  /// A double-width glyph also claims the cell to its right as a [continuation].
+  /// At the last column there is no such cell, so the glyph is replaced by the
+  /// fill: drawing it would make the terminal wrap and the row would silently
+  /// become two.
   void set(int x, int y, String glyph, {AnsiStyle? style}) {
     if (!_inside(x, y)) return;
-    final i = y * width + x;
+    final wide = glyph.length > 1 || glyph.isNotEmpty
+        ? _isWideGlyph(glyph)
+        : false;
+    if (wide && x + 1 >= width) {
+      _write(y * width + x, _fill, style);
+      return;
+    }
+    _write(y * width + x, glyph, style);
+    if (wide) _write(y * width + x + 1, continuation, style);
+  }
+
+  void _write(int i, String glyph, AnsiStyle? style) {
     _glyphs[i] = glyph;
     if (style != null && !style.isEmpty) {
       (_styles ??= List<AnsiStyle?>.filled(width * height, null))[i] = style;
     }
+  }
+
+  static bool _isWideGlyph(String glyph) {
+    final runes = glyph.runes;
+    if (runes.isEmpty) return false;
+    return runeWidth(runes.first) == 2;
   }
 
   /// The glyph at ([x], [y]), or the fill character if outside the canvas.
@@ -86,10 +116,12 @@ class Canvas {
 
   /// Writes [text] left to right starting at ([x], [y]).
   ///
-  /// Advances by each character's display width, so a wide character occupies the
-  /// two columns it will actually be drawn in and whatever follows stays aligned.
-  /// The second column of a wide character is left as the fill, because writing
-  /// anything there would be overwritten by the terminal anyway.
+  /// Advances by each character's display width, so a wide character occupies both
+  /// of the columns it is drawn in — [set] marks the second as a [continuation] —
+  /// and whatever follows stays aligned.
+  ///
+  /// A zero-width character is written into the same cell as the character it
+  /// modifies, appended to it, so an accented letter stays one cell.
   void drawText(
     int x,
     int y,
@@ -100,9 +132,18 @@ class Canvas {
     var cx = x;
     for (final rune in text.runes) {
       final ch = String.fromCharCode(rune);
-      set(cx, y, ch, style: style);
       final w = runeWidth(rune);
-      cx += w == 0 ? 1 : w;
+      if (w == 0) {
+        // Attach to the previous cell rather than consuming one of its own, so
+        // 'e' + combining acute occupies a single column as it will on screen.
+        final prev = cx - 1;
+        if (_inside(prev, y)) {
+          _write(y * width + prev, glyphAt(prev, y) + ch, style);
+        }
+        continue;
+      }
+      set(cx, y, ch, style: style);
+      cx += w;
     }
   }
 
@@ -218,7 +259,10 @@ class Canvas {
       final row = StringBuffer();
       var last = y * width + width - 1;
       if (trimRight) {
-        while (last >= y * width && _glyphs[last] == _fill) {
+        // A continuation cell is blank for this purpose too, so a row ending in
+        // one does not keep an invisible tail.
+        while (last >= y * width &&
+            (_glyphs[last] == _fill || _glyphs[last] == continuation)) {
           last--;
         }
       }

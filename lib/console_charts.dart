@@ -31,6 +31,8 @@ library;
 
 export 'src/canvas.dart' show Canvas;
 export 'src/charset.dart' show CharSet, CharSets, levelGlyph, partialGlyph;
+export 'src/charts/sparkline.dart'
+    show SparklineGroup, drawSparkline, sparkline;
 export 'src/format.dart'
     show
         NumberFormat,
@@ -39,6 +41,26 @@ export 'src/format.dart'
         formatFixed,
         formatPercent,
         formatWithUnit;
+export 'src/renderable.dart' show Renderable;
+export 'src/resample.dart'
+    show
+        ColumnSample,
+        ResampleMode,
+        bucketSamples,
+        interpolateToColumns,
+        largestTriangleThreeBuckets,
+        resample;
+export 'src/scale.dart'
+    show
+        AxisMode,
+        LinearScale,
+        NiceStep,
+        apportion,
+        dataExtent,
+        maxTicksForHeight,
+        niceBounds,
+        niceStep;
+export 'src/series.dart' show DataPoint, Series, XYSeries;
 export 'src/style.dart' show AnsiColor, AnsiStyle, reset, stripAnsi;
 export 'src/theme.dart' show ChartTheme, NumberFormatter;
 export 'src/width.dart'

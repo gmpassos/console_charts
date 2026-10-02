@@ -24,11 +24,12 @@ String formatAuto(num value) {
   if (v.isNaN) return 'NaN';
   if (v.isInfinite) return v.isNegative ? '-∞' : '∞';
   if (v == 0) return '0';
-  if (v == v.roundToDouble() && v.abs() < 1e15) {
-    return v.toStringAsFixed(0);
-  }
   final a = v.abs();
+  // Magnitude is checked BEFORE whole-ness, because a large whole number is still
+  // too wide for an axis: 1200000000 is ten columns where 1.2e+9 is six. Checking
+  // whole-ness first would let every big round number through unshortened.
   if (a >= 1e7 || a < 1e-4) return _stripZeros(v.toStringAsExponential(2));
+  if (v == v.roundToDouble()) return v.toStringAsFixed(0);
   if (a >= 100) return _stripZeros(v.toStringAsFixed(1));
   if (a >= 1) return _stripZeros(v.toStringAsFixed(2));
   return _stripZeros(v.toStringAsFixed(4));
