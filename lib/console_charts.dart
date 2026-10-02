@@ -31,6 +31,9 @@ library;
 
 export 'src/canvas.dart' show Canvas;
 export 'src/charset.dart' show CharSet, CharSets, levelGlyph, partialGlyph;
+export 'src/charts/bar_chart.dart' show BarChart, BarMode;
+export 'src/charts/gauge.dart'
+    show BulletChart, Gauge, GaugeRow, ProgressBar, drawGauge;
 export 'src/charts/sparkline.dart'
     show SparklineGroup, drawSparkline, sparkline;
 export 'src/format.dart'
@@ -42,6 +45,7 @@ export 'src/format.dart'
         formatPercent,
         formatWithUnit;
 export 'src/renderable.dart' show Renderable;
+export 'src/row_frame.dart' show drawBarEighths, renderRowFrame;
 export 'src/resample.dart'
     show
         ColumnSample,
