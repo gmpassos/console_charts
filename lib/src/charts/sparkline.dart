@@ -144,14 +144,20 @@ class SparklineGroup implements Renderable {
     final sparkWidth = total - overhead;
     if (sparkWidth < 1) {
       // Not enough room for a chart at all. Degrade to labels and values, which is
-      // still useful, rather than returning nothing.
+      // still useful, rather than returning nothing — but still inside the requested
+      // width, because a caller that asked for n columns has budgeted n columns and
+      // a wider line would break whatever contains this.
       return [
         for (var i = 0; i < series.length; i++)
-          [
-            if (labelWidth > 0)
-              padToWidth(labels[i], labelWidth, width: measure),
-            if (valueWidth > 0) values[i],
-          ].join(' ').trimRight(),
+          truncateToWidth(
+            [
+              if (labelWidth > 0) labels[i],
+              if (valueWidth > 0) values[i],
+            ].join(' ').trimRight(),
+            total,
+            ellipsis: total > 1 ? '…' : '',
+            width: measure,
+          ),
       ];
     }
 
