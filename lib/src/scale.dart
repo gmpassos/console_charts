@@ -54,7 +54,82 @@ class NiceStep {
 /// when the domain is already known.
 class LinearScale {
   /// Creates a scale over [min]..[max] across [size] cells.
-  const LinearScale(this.min, this.max, this.size, {this.step});
+  const LinearScale(
+    this.min,
+    this.max,
+    this.size, {
+    this.step,
+    this.logarithmic = false,
+  });
+
+  /// Creates a scale that positions values by their logarithm.
+  ///
+  /// For data that decays or grows by *factors* rather than by amounts — a training
+  /// loss, a latency distribution, anything spanning more than about two orders of
+  /// magnitude. On a linear axis a series falling 2.4 → 0.05 spends most of its life
+  /// compressed into the bottom row or two, so a plateau in the tail — the thing a
+  /// reader is watching for — is invisible. On a log axis a constant decay rate is a
+  /// straight line and a plateau is a visible bend.
+  ///
+  /// Both bounds must be strictly positive, since the logarithm of zero is
+  /// unbounded. [LinearScale.fitLog] derives them from data and takes care of that;
+  /// this constructor clamps a non-positive bound up to a small positive value
+  /// rather than producing a scale that returns NaN for everything.
+  factory LinearScale.log(double min, double max, int size) {
+    var lo = min;
+    var hi = max;
+    if (!(lo > 0)) lo = _logFloor;
+    if (!(hi > lo)) hi = lo * 10;
+    return LinearScale(lo, hi, size, logarithmic: true);
+  }
+
+  /// Fits a logarithmic domain to [values], ignoring anything non-positive.
+  ///
+  /// Values at or below zero cannot be placed on a log axis at all — they are
+  /// excluded from the domain and [normalize] returns null for them, so they render
+  /// as gaps. That is the honest outcome: a zero is not "very small" on a
+  /// multiplicative axis, it is off the end of it.
+  ///
+  /// The bounds are rounded outward to whole powers of ten, which is what makes the
+  /// ticks readable.
+  factory LinearScale.fitLog(
+    Iterable<num?> values,
+    int size, {
+    num? min,
+    num? max,
+  }) {
+    double? lo;
+    double? hi;
+    for (final value in values) {
+      if (value == null) continue;
+      final v = value.toDouble();
+      if (!v.isFinite || v <= 0) continue;
+      if (lo == null || v < lo) lo = v;
+      if (hi == null || v > hi) hi = v;
+    }
+    var bottom = min?.toDouble() ?? lo ?? 1.0;
+    var top = max?.toDouble() ?? hi ?? 10.0;
+    if (!(bottom > 0)) bottom = _logFloor;
+    if (!(top > bottom)) top = bottom * 10;
+
+    // Outward to whole decades, so every tick is a round power of ten.
+    final loExp = (math.log(bottom) / math.ln10).floor();
+    final hiExp = (math.log(top) / math.ln10).ceil();
+    final decadeLo = math.pow(10, loExp).toDouble();
+    final decadeHi = math.pow(10, hiExp).toDouble();
+    return LinearScale(
+      decadeLo.isFinite && decadeLo > 0 ? decadeLo : bottom,
+      decadeHi.isFinite && decadeHi > bottom ? decadeHi : top,
+      size,
+      logarithmic: true,
+    );
+  }
+
+  /// Whether positions are computed from the logarithm of a value.
+  ///
+  /// When true, [min] and [max] are guaranteed positive and values at or below zero
+  /// return null from [normalize] — they are off the axis, not at the bottom of it.
+  final bool logarithmic;
 
   /// The step the bounds were rounded to, when they were.
   ///
@@ -139,7 +214,8 @@ class LinearScale {
   ///
   /// Charts build a scale before they know the plot area, because the axis labels
   /// determine how much room is left; this rebinds it afterwards.
-  LinearScale withSize(int size) => LinearScale(min, max, size, step: step);
+  LinearScale withSize(int size) =>
+      LinearScale(min, max, size, step: step, logarithmic: logarithmic);
 
   /// The width of the domain.
   double get span => max - min;
@@ -160,6 +236,18 @@ class LinearScale {
     final v = value.toDouble();
     if (!v.isFinite) return null;
     if (!(max > min)) return 0.5;
+    if (logarithmic) {
+      // Off the axis rather than at the bottom of it: on a multiplicative scale a
+      // zero is not a small number, and clamping it to the floor would draw a point
+      // that claims a value the data does not have.
+      if (v <= 0) return null;
+      final lo = math.log(min);
+      final span = math.log(max) - lo;
+      if (!(span > 0)) return 0.5;
+      final t = (math.log(v) - lo) / span;
+      if (!t.isFinite) return null;
+      return t < 0 ? 0 : (t > 1 ? 1 : t);
+    }
     final t = (v - min) / (max - min);
     if (!t.isFinite) return null;
     return t < 0 ? 0 : (t > 1 ? 1 : t);
@@ -194,8 +282,15 @@ class LinearScale {
   }
 
   /// The value at the centre of cell [cell].
-  double valueOfCell(int cell) =>
-      size <= 1 ? min : min + span * (cell / (size - 1));
+  double valueOfCell(int cell) {
+    if (size <= 1) return min;
+    final t = cell / (size - 1);
+    if (logarithmic) {
+      final lo = math.log(min);
+      return math.exp(lo + (math.log(max) - lo) * t);
+    }
+    return min + span * t;
+  }
 
   /// Tick values spanning the domain, ascending.
   ///
@@ -212,6 +307,7 @@ class LinearScale {
   /// so error cannot accumulate along the axis.
   List<double> ticks(int maxTicks) {
     if (maxTicks < 2) return [min, max];
+    if (logarithmic) return _logTicks(maxTicks);
     final s = step ?? niceStep(span, maxTicks);
     if (!(s.value > 0)) return [min, max];
     final out = <double>[];
@@ -228,13 +324,57 @@ class LinearScale {
     return out;
   }
 
+  /// Ticks for a logarithmic axis: powers of ten, thinned to fit.
+  ///
+  /// Decades first, because a log axis is read by its decades. If there are too few
+  /// to label — a domain spanning less than two — the 2 and 5 mantissas are added,
+  /// which keeps a narrow log axis from having only one tick on it. If there are too
+  /// many, whole decades are skipped rather than crowding.
+  List<double> _logTicks(int maxTicks) {
+    final loExp = (math.log(min) / math.ln10).round();
+    final hiExp = (math.log(max) / math.ln10).round();
+    final decades = hiExp - loExp;
+    if (decades < 1) return [min, max];
+
+    if (decades + 1 <= maxTicks) {
+      final out = <double>[];
+      // Sub-decade mantissas only when there is room for all of them, otherwise the
+      // axis ends up with an uneven mix of 1s and 5s that reads as a mistake.
+      final withMantissas = (decades * 3 + 1) <= maxTicks;
+      for (var e = loExp; e <= hiExp; e++) {
+        final decade = math.pow(10, e).toDouble();
+        out.add(decade);
+        if (withMantissas && e < hiExp) {
+          out.add(decade * 2);
+          out.add(decade * 5);
+        }
+      }
+      return out.where((v) => v >= min && v <= max * (1 + 1e-9)).toList();
+    }
+
+    final stride = (decades / (maxTicks - 1)).ceil();
+    final out = <double>[];
+    for (var e = loExp; e <= hiExp; e += stride) {
+      out.add(math.pow(10, e).toDouble());
+    }
+    if (out.last < max * (1 - 1e-9)) out.add(max);
+    return out;
+  }
+
   /// The step [ticks] uses, for callers that need its [NiceStep.decimals].
   NiceStep tickStep(int maxTicks) =>
       step ?? (maxTicks < 2 ? const NiceStep(1, 0) : niceStep(span, maxTicks));
 
   @override
-  String toString() => 'LinearScale($min..$max over $size)';
+  String toString() =>
+      'LinearScale($min..$max over $size${logarithmic ? ', log' : ''})';
 }
+
+/// The smallest positive bound a logarithmic scale falls back to.
+///
+/// Small enough never to clip real data, large enough that its logarithm is a long
+/// way from underflow.
+const double _logFloor = 1e-12;
 
 /// The lowest and highest finite values in [values], or null if there are none.
 ///

@@ -55,7 +55,8 @@ export 'src/charts/gauge.dart'
     show BulletChart, Gauge, GaugeRow, ProgressBar, drawGauge;
 export 'src/charts/heatmap.dart'
     show CalendarHeatmap, GridData, Heatmap, drawHeatmapRow;
-export 'src/charts/line_chart.dart' show AreaChart, LineChart;
+export 'src/braille.dart' show BrailleCanvas, brailleDotsX, brailleDotsY;
+export 'src/charts/line_chart.dart' show AreaChart, LineChart, LineStyle;
 export 'src/charts/scatter_chart.dart' show ScatterChart;
 export 'src/charts/sparkline.dart'
     show SparklineGroup, drawSparkline, sparkline;
@@ -81,6 +82,8 @@ export 'src/layout.dart'
         rule,
         vstack;
 export 'src/plot.dart' show Plot, lineGlyphs;
+export 'src/reference.dart' show EventMarker, ReferenceLine;
+export 'src/ring_series.dart' show RingDecimation, RingSeries;
 export 'src/plot_frame.dart' show AxisInsets, Axes, levelsFor, renderPlotFrame;
 export 'src/renderable.dart' show Renderable;
 export 'src/row_frame.dart' show drawBarEighths, renderRowFrame;

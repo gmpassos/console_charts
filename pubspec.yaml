@@ -3,7 +3,7 @@ description: >-
   Charts for the console and terminal, rendered as plain text. Sparklines, line
   and bar charts, gauges, heatmaps and dashboards. No dart:io, so it works on the
   web too, and no dependencies.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/gmpassos/console_charts
 issue_tracker: https://github.com/gmpassos/console_charts/issues
 
