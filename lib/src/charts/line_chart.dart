@@ -198,8 +198,9 @@ class LineChart implements Renderable {
   final LineStyle lineStyle;
 
   /// A band under the x axis marking which regime each stretch of the series
-  /// came from — see [ChartStrip]. Its glyphs are indexed like the longest
-  /// series. Drawn between the axis and the [xCaption].
+  /// came from — see [ChartStrip]. One glyph per point of the longest series;
+  /// any other length throws. Drawn directly under the x axis, above the spread
+  /// [xLabels] or the [xCaption].
   final ChartStrip? strip;
 
   @override
@@ -232,7 +233,28 @@ class LineChart implements Renderable {
           );
 
     final longest = series.fold(0, (m, s) => s.length > m ? s.length : m);
+    final s = strip;
+    // Refused rather than drawn: a strip of another length would be resampled
+    // onto the columns all the same and come out quietly misaligned with the
+    // curve — the one thing it exists to get right.
+    if (s != null) {
+      if (s.glyphs.length != longest) {
+        throw ArgumentError.value(
+          s.glyphs.length,
+          'strip',
+          'must have one glyph per data point ($longest)',
+        );
+      }
+      if (s.styles != null && s.styles!.length != s.glyphs.length) {
+        throw ArgumentError.value(
+          s.styles!.length,
+          'strip.styles',
+          'must have one entry per glyph (${s.glyphs.length})',
+        );
+      }
+    }
     var plotWidth = 0;
+    var plotHeight = 0;
 
     final lines = renderPlotFrame(
       width: w,
@@ -245,6 +267,7 @@ class LineChart implements Renderable {
       xScale: (plotWidth) => LinearScale.index(plotWidth, plotWidth),
       draw: (plot) {
         plotWidth = plot.width;
+        plotHeight = plot.height;
         // References first, so a series drawn over one keeps the cell. A reference is
         // context; the data is the point.
         for (final reference in references) {
@@ -304,17 +327,25 @@ class LineChart implements Renderable {
     );
 
     if (lines.isEmpty) return lines;
-    // Read before the strip is appended: both it and the caption measure the
-    // gutter off the axis row, which must still be the last line.
-    final gutter = _gutter(lines);
-    final stripLine = strip == null || plotWidth <= 0
-        ? null
-        : _stripLine(strip!, gutter, plotWidth);
     final caption = xCaption;
+    final captionLine = caption != null && xLabels == null
+        ? _captionLine(caption, w, _gutter(lines))
+        : null;
+    if (s == null || plotWidth <= 0) return [...lines, ?captionLine];
+
+    // From the layout, not the text: the frame never insets the right, so the
+    // plot starts exactly `w - plotWidth` in — with or without a y axis, and in
+    // the degraded no-axes layout. A spread-labels row, when there is one, is
+    // the last line, and the strip belongs above it, directly under the axis.
+    final plotLeft = w - plotWidth;
+    final labelsRow =
+        xLabels != null && xLabels!.isNotEmpty && lines.length > plotHeight;
+    final at = labelsRow ? lines.length - 1 : lines.length;
     return [
-      ...lines,
-      ?stripLine,
-      if (caption != null && xLabels == null) _captionLine(caption, w, gutter),
+      ...lines.sublist(0, at),
+      _stripLine(s, plotLeft, plotWidth),
+      ...lines.sublist(at),
+      ?captionLine,
     ];
   }
 
@@ -340,22 +371,24 @@ class LineChart implements Renderable {
   }
 
   /// The [ChartStrip] row: its label in the gutter, then one glyph per plot
-  /// column, starting one past the axis origin where the plot itself starts.
-  String _stripLine(ChartStrip s, int gutter, int plotWidth) {
+  /// column, starting at [plotLeft] where the plot itself starts.
+  String _stripLine(ChartStrip s, int plotLeft, int plotWidth) {
     final measure = theme.width;
     final label = s.label;
     final String head;
-    if (label == null || gutter < 2) {
-      head = ' ' * (gutter + 1);
+    // The label needs a column for itself, one for the space before the axis,
+    // and the axis column: three at least.
+    if (label == null || plotLeft < 3) {
+      head = ' ' * plotLeft;
     } else {
       final fit = truncateToWidth(
         label,
-        gutter - 1,
+        plotLeft - 2,
         ellipsis: '',
         width: measure,
       );
       // Right-aligned against the axis column, a space short of it.
-      head = '${' ' * (gutter - measure(fit))}$fit ';
+      head = '${' ' * (plotLeft - 1 - measure(fit))}$fit ';
     }
     final glyphs = resampleCategories(s.glyphs, plotWidth);
     final styles = s.styles == null || !theme.color
@@ -363,9 +396,11 @@ class LineChart implements Renderable {
         : resampleCategories(s.styles!, plotWidth);
     final out = StringBuffer(head);
     for (var x = 0; x < glyphs.length; x++) {
-      final g = glyphs[x] ?? ' ';
+      final g = glyphs[x];
       final st = styles?[x];
-      out.write(st == null ? g : st.apply(g));
+      // A blank column is not styled: a coloured space is invisible, costs two
+      // escapes, and at the end of the row would survive the trim below.
+      out.write(g == null ? ' ' : (st == null ? g : st.apply(g)));
     }
     return out.toString().trimRight();
   }

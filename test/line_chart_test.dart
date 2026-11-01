@@ -574,10 +574,59 @@ void main() {
         height: 6,
         xLabels: labels,
       ).renderLines();
-      // The labels row is the frame's own last line; the strip follows it.
+      // Directly under the axis, ABOVE the labels row — and lined up with the
+      // plot, which the axis row no longer being last must not disturb.
       expect(lines, hasLength(plain.length + 1));
-      expect(lines.sublist(0, plain.length), plain);
-      expect(lines.last, contains('█'));
+      expect(
+        lines.sublist(0, plain.length - 1),
+        plain.sublist(0, plain.length - 1),
+      );
+      expect(lines.last, plain.last, reason: 'the labels row is unchanged');
+      final axisRow = plain[plain.length - 2];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow.substring(0, origin + 1).trim(), isEmpty);
+      expect(stripRow[origin + 1], '─', reason: 'starts where the plot does');
+    });
+
+    test('lines up with a plot that has no y axis', () {
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        axes: const Axes(showY: false, showYLabels: false),
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      // No gutter at all: the plot starts in column 0, and so does the strip.
+      expect(lines.last[0], '─');
+      expect(lines.last.length, 50);
+    });
+
+    test('a strip that does not match the series is refused', () {
+      expect(
+        () => render(strip: ChartStrip(glyphs.sublist(1))),
+        throwsArgumentError,
+      );
+      expect(
+        () => render(strip: ChartStrip(glyphs, styles: const [AnsiStyle()])),
+        throwsArgumentError,
+      );
+    });
+
+    test('a blank column is never styled', () {
+      final sparse = [for (var i = 0; i < 40; i++) i < 30 ? '█' : null];
+      final lines = render(
+        strip: ChartStrip(
+          sparse,
+          styles: [
+            for (var i = 0; i < 40; i++) const AnsiStyle.of(AnsiColor.red),
+          ],
+        ),
+        theme: ChartTheme.colorful,
+      );
+      final stripRow = lines[lines.length - 2];
+      // Trimmed after the last mark: no coloured spaces trailing it.
+      expect(stripRow, endsWith('█$ansiReset'));
     });
 
     test('a null glyph leaves its columns blank', () {

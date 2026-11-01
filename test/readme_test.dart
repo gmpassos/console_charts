@@ -22,6 +22,58 @@ void main() {
       expect(sparkline([5, 6, 7, null, null, 7, 6, 5]), '▁▅█  █▅▁');
     });
 
+    test('the regime strip', () {
+      const loss = [
+        6.6,
+        6.4,
+        6.2,
+        6.1,
+        6.15,
+        6.3,
+        6.2,
+        6.0,
+        5.9,
+        5.85,
+        5.8,
+        5.78,
+      ];
+      const regime = [
+        '─',
+        '─',
+        '─',
+        '─',
+        '█',
+        '█',
+        '█',
+        '─',
+        '─',
+        '─',
+        '█',
+        '█',
+      ];
+      expect(
+        LineChart.of(
+          loss,
+          width: 40,
+          height: 8,
+          xCaption: ('blk 0', 'blk 11'),
+          strip: const ChartStrip(regime, label: 'opt'),
+        ).render(),
+        block(r'''
+          |7.0 ┤
+          |    │
+          |6.5 ┤───╮
+          |    │   ╰────╮ ╭────────╮
+          |6.0 ┤        ╰─╯        ╰──────╮
+          |    │                          ╰────────
+          |5.5 ┤
+          |    ┼───────────────────────────────────
+          | opt ───────────██████████─────────█████
+          |    blk 0                         blk 11
+        '''),
+      );
+    });
+
     test('the line chart', () {
       expect(
         LineChart.of(
