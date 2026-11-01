@@ -452,4 +452,243 @@ void main() {
       }
     });
   });
+
+  group('resampleCategories', () {
+    test('a bucket takes its majority, ties to the later value', () {
+      expect(
+        resampleCategories(['a', 'a', 'b', 'b', 'b', 'b', 'a', 'b', 'b'], 3),
+        ['a', 'b', 'b'],
+      );
+      expect(resampleCategories(['a', 'b', 'b', 'a'], 2), ['b', 'a']);
+    });
+
+    test('a stretched series takes the nearest value', () {
+      expect(resampleCategories(['a', 'b'], 4), ['a', 'a', 'b', 'b']);
+    });
+
+    test('same length is identity; empty in, empty out', () {
+      expect(resampleCategories(['a', null, 'b'], 3), ['a', null, 'b']);
+      expect(resampleCategories(<String>[], 5), isEmpty);
+      expect(resampleCategories(['a'], 0), isEmpty);
+    });
+  });
+
+  group('LineChart · strip', () {
+    final values = [for (var i = 0; i < 40; i++) 10.0 - i / 8];
+    final glyphs = [for (var i = 0; i < 40; i++) i >= 10 && i < 20 ? '█' : '─'];
+
+    List<String> render({ChartStrip? strip, ChartTheme? theme}) => LineChart.of(
+      values,
+      width: 50,
+      height: 6,
+      theme: theme ?? ChartTheme.plain,
+      xCaption: ('blk 0', 'blk 39'),
+      strip: strip,
+    ).renderLines();
+
+    test('sits between the axis and the caption, adding one row', () {
+      final plain = render();
+      final strip = render(strip: ChartStrip(glyphs, label: 'mode'));
+      expect(strip, hasLength(plain.length + 1));
+      expect(
+        strip.sublist(0, plain.length - 1),
+        plain.sublist(0, plain.length - 1),
+      );
+      expect(strip.last, plain.last, reason: 'the caption is unchanged');
+      // The label sits in the gutter, cut to fit it — this gutter is 3 wide,
+      // so 'mode' becomes 'mo' plus the space before the plot.
+      final origin = plain[plain.length - 2].indexOf('┼');
+      final head = strip[plain.length - 1].substring(0, origin + 1);
+      expect(head.trim(), 'mo');
+      expect(head, endsWith(' '));
+    });
+
+    test('starts one column past the axis origin, where the plot starts', () {
+      final lines = render(strip: ChartStrip(glyphs));
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow.substring(0, origin + 1).trim(), isEmpty);
+      expect(stripRow[origin + 1], '─');
+      // The plot is 40 points over the plot's columns: 10..20 of 40 is the
+      // second quarter, and it shows up there, not in the gutter or at the end.
+      final band = stripRow.substring(origin + 1);
+      final first = band.indexOf('█');
+      final last = band.lastIndexOf('█');
+      expect(first / band.length, closeTo(0.25, 0.05));
+      expect((last + 1) / band.length, closeTo(0.5, 0.05));
+    });
+
+    test('colour adds escapes and changes no geometry', () {
+      final strip = ChartStrip(
+        glyphs,
+        styles: [
+          for (final g in glyphs)
+            AnsiStyle.of(g == '█' ? AnsiColor.yellow : AnsiColor.cyan),
+        ],
+        label: 'mode',
+      );
+      final coloured = render(strip: strip, theme: ChartTheme.colorful);
+      expect(coloured.join('\n'), contains('\x1b[33m█'));
+      expect(
+        coloured.map(stripAnsi).toList(),
+        render(strip: ChartStrip(glyphs, label: 'mode')),
+      );
+    });
+
+    test('a label wider than the gutter is cut', () {
+      final lines = render(
+        strip: ChartStrip(glyphs, label: 'a very long label'),
+      );
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow[origin], ' ', reason: 'a space before the plot column');
+      expect(stripRow[origin + 1], '─');
+    });
+
+    test('without a caption the strip is the last row', () {
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      final plain = LineChart.of(values, width: 50, height: 6).renderLines();
+      expect(lines, hasLength(plain.length + 1));
+      expect(lines.last, contains('█'));
+    });
+
+    test('with spread x labels the strip still sits under the axis', () {
+      final labels = ['a', 'b', 'c', 'd'];
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        xLabels: labels,
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      final plain = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        xLabels: labels,
+      ).renderLines();
+      // Directly under the axis, ABOVE the labels row — and lined up with the
+      // plot, which the axis row no longer being last must not disturb.
+      expect(lines, hasLength(plain.length + 1));
+      expect(
+        lines.sublist(0, plain.length - 1),
+        plain.sublist(0, plain.length - 1),
+      );
+      expect(lines.last, plain.last, reason: 'the labels row is unchanged');
+      final axisRow = plain[plain.length - 2];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow.substring(0, origin + 1).trim(), isEmpty);
+      expect(stripRow[origin + 1], '─', reason: 'starts where the plot does');
+    });
+
+    test('lines up with a plot that has no y axis', () {
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        axes: const Axes(showY: false, showYLabels: false),
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      // No gutter at all: the plot starts in column 0, and so does the strip.
+      expect(lines.last[0], '─');
+      expect(lines.last.length, 50);
+    });
+
+    test('a strip that does not match the series is refused', () {
+      expect(
+        () => render(strip: ChartStrip(glyphs.sublist(1))),
+        throwsArgumentError,
+      );
+      expect(
+        () => render(strip: ChartStrip(glyphs, styles: const [AnsiStyle()])),
+        throwsArgumentError,
+      );
+    });
+
+    test('a blank column is never styled', () {
+      final sparse = [for (var i = 0; i < 40; i++) i < 30 ? '█' : null];
+      final lines = render(
+        strip: ChartStrip(
+          sparse,
+          styles: [
+            for (var i = 0; i < 40; i++) const AnsiStyle.of(AnsiColor.red),
+          ],
+        ),
+        theme: ChartTheme.colorful,
+      );
+      final stripRow = lines[lines.length - 2];
+      // Trimmed after the last mark: no coloured spaces trailing it.
+      expect(stripRow, endsWith('█$ansiReset'));
+    });
+
+    test('a null glyph leaves its columns blank', () {
+      final sparse = [for (var i = 0; i < 40; i++) i < 20 ? null : '█'];
+      final lines = render(strip: ChartStrip(sparse));
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final band = lines[lines.length - 2].substring(origin + 1);
+      final firstMark = band.indexOf('█');
+      expect(band.substring(0, firstMark).trim(), isEmpty);
+      expect(firstMark / 49, closeTo(0.5, 0.06));
+    });
+
+    test('stays aligned when the series is stretched across the plot', () {
+      // 4 points over ~45 columns: the strip stretches the same way the
+      // line does, so the regime change lands where the curve's point does.
+      final lines = LineChart.of(
+        [4, 3, 2, 1],
+        width: 50,
+        height: 6,
+        strip: const ChartStrip(['─', '─', '█', '█']),
+      ).renderLines();
+      final axisRow = lines[lines.length - 2];
+      final origin = axisRow.indexOf('┼');
+      final band = lines.last.substring(origin + 1);
+      expect(band.indexOf('█') / band.length, closeTo(0.5, 0.05));
+    });
+  });
+
+  group('resampleCategories · alignment', () {
+    test('uses exactly the column boundaries bucketSamples uses', () {
+      // A uniform bucket's majority is its only value, so labelling every
+      // sample with its own bucket must give back the bucket indices — for any
+      // n and width where both shrink.
+      for (final n in [7, 10, 33, 100]) {
+        for (final columns in [1, 3, 7]) {
+          if (columns > n) continue;
+          final bucketOf = List<int>.filled(n, -1);
+          for (var c = 0; c < columns; c++) {
+            final start = (c * n) ~/ columns;
+            final end = ((c + 1) * n) ~/ columns;
+            for (var i = start; i < end; i++) {
+              bucketOf[i] = c;
+            }
+          }
+          expect(resampleCategories(bucketOf, columns), [
+            for (var c = 0; c < columns; c++) c,
+          ], reason: 'n=$n columns=$columns');
+          expect(bucketSamples(bucketOf, columns).map((s) => s.min), [
+            for (var c = 0; c < columns; c++) c,
+          ]);
+        }
+      }
+    });
+
+    test('without stretch, a short series is not interpolated', () {
+      expect(resampleCategories(['a', 'b'], 4, stretch: false), hasLength(4));
+      expect(resampleCategories(['a', 'b'], 1), ['b'], reason: 'tie: later');
+    });
+
+    test('null is a category like any other', () {
+      expect(resampleCategories([null, null, 'a'], 1), [null]);
+    });
+  });
 }

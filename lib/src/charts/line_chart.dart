@@ -65,6 +65,7 @@ class LineChart implements Renderable {
     this.markers = const [],
     this.xCaption,
     this.lineStyle = LineStyle.glyph,
+    this.strip,
   });
 
   /// Convenience for a single unnamed series.
@@ -87,6 +88,7 @@ class LineChart implements Renderable {
     List<EventMarker> markers = const [],
     (String, String)? xCaption,
     LineStyle lineStyle = LineStyle.glyph,
+    ChartStrip? strip,
   }) : this(
          [Series(values)],
          width: width,
@@ -106,6 +108,7 @@ class LineChart implements Renderable {
          markers: markers,
          xCaption: xCaption,
          lineStyle: lineStyle,
+         strip: strip,
        );
 
   /// The series to draw. Each gets its own colour from the theme's palette.
@@ -194,6 +197,12 @@ class LineChart implements Renderable {
   /// loop is how a shadowed variable turns into a silent bug.
   final LineStyle lineStyle;
 
+  /// A band under the x axis marking which regime each stretch of the series
+  /// came from — see [ChartStrip]. One glyph per point of the longest series;
+  /// any other length throws. Drawn directly under the x axis, above the spread
+  /// [xLabels] or the [xCaption].
+  final ChartStrip? strip;
+
   @override
   List<String> renderLines() {
     if (series.isEmpty) return const [];
@@ -224,6 +233,28 @@ class LineChart implements Renderable {
           );
 
     final longest = series.fold(0, (m, s) => s.length > m ? s.length : m);
+    final s = strip;
+    // Refused rather than drawn: a strip of another length would be resampled
+    // onto the columns all the same and come out quietly misaligned with the
+    // curve — the one thing it exists to get right.
+    if (s != null) {
+      if (s.glyphs.length != longest) {
+        throw ArgumentError.value(
+          s.glyphs.length,
+          'strip',
+          'must have one glyph per data point ($longest)',
+        );
+      }
+      if (s.styles != null && s.styles!.length != s.glyphs.length) {
+        throw ArgumentError.value(
+          s.styles!.length,
+          'strip.styles',
+          'must have one entry per glyph (${s.glyphs.length})',
+        );
+      }
+    }
+    var plotWidth = 0;
+    var plotHeight = 0;
 
     final lines = renderPlotFrame(
       width: w,
@@ -235,6 +266,8 @@ class LineChart implements Renderable {
       yScale: yScale,
       xScale: (plotWidth) => LinearScale.index(plotWidth, plotWidth),
       draw: (plot) {
+        plotWidth = plot.width;
+        plotHeight = plot.height;
         // References first, so a series drawn over one keeps the cell. A reference is
         // context; the data is the point.
         for (final reference in references) {
@@ -293,9 +326,83 @@ class LineChart implements Renderable {
       },
     );
 
+    if (lines.isEmpty) return lines;
     final caption = xCaption;
-    if (caption == null || xLabels != null || lines.isEmpty) return lines;
-    return [...lines, _captionLine(caption, w, lines)];
+    final captionLine = caption != null && xLabels == null
+        ? _captionLine(caption, w, _gutter(lines))
+        : null;
+    if (s == null || plotWidth <= 0) return [...lines, ?captionLine];
+
+    // From the layout, not the text: the frame never insets the right, so the
+    // plot starts exactly `w - plotWidth` in — with or without a y axis, and in
+    // the degraded no-axes layout. A spread-labels row, when there is one, is
+    // the last line, and the strip belongs above it, directly under the axis.
+    final plotLeft = w - plotWidth;
+    final labelsRow =
+        xLabels != null && xLabels!.isNotEmpty && lines.length > plotHeight;
+    final at = labelsRow ? lines.length - 1 : lines.length;
+    return [
+      ...lines.sublist(0, at),
+      _stripLine(s, plotLeft, plotWidth),
+      ...lines.sublist(at),
+      ?captionLine,
+    ];
+  }
+
+  /// The column the axis origin sits in — the y gutter's width.
+  ///
+  /// Read back from the rendered axis row — the frame already decided how wide
+  /// it is, and deriving it a second time is how the two drift apart.
+  ///
+  /// **The row is stripped of escape sequences before it is scanned.** With colour on,
+  /// the axis row begins with an SGR sequence, and counting its characters as gutter
+  /// made the caption land in a different column than it did in the plain render —
+  /// which is the exact failure this package's cell-grid design exists to prevent,
+  /// and which a colour-equivalence test caught.
+  int _gutter(List<String> lines) {
+    final axisRow = stripAnsi(lines.last);
+    var gutter = 0;
+    while (gutter < axisRow.length &&
+        axisRow[gutter] != theme.charset.axisOrigin &&
+        axisRow[gutter] != theme.charset.horizontal) {
+      gutter++;
+    }
+    return gutter >= axisRow.length ? 0 : gutter;
+  }
+
+  /// The [ChartStrip] row: its label in the gutter, then one glyph per plot
+  /// column, starting at [plotLeft] where the plot itself starts.
+  String _stripLine(ChartStrip s, int plotLeft, int plotWidth) {
+    final measure = theme.width;
+    final label = s.label;
+    final String head;
+    // The label needs a column for itself, one for the space before the axis,
+    // and the axis column: three at least.
+    if (label == null || plotLeft < 3) {
+      head = ' ' * plotLeft;
+    } else {
+      final fit = truncateToWidth(
+        label,
+        plotLeft - 2,
+        ellipsis: '',
+        width: measure,
+      );
+      // Right-aligned against the axis column, a space short of it.
+      head = '${' ' * (plotLeft - 1 - measure(fit))}$fit ';
+    }
+    final glyphs = resampleCategories(s.glyphs, plotWidth);
+    final styles = s.styles == null || !theme.color
+        ? null
+        : resampleCategories(s.styles!, plotWidth);
+    final out = StringBuffer(head);
+    for (var x = 0; x < glyphs.length; x++) {
+      final g = glyphs[x];
+      final st = styles?[x];
+      // A blank column is not styled: a coloured space is invisible, costs two
+      // escapes, and at the end of the row would survive the trim below.
+      out.write(g == null ? ' ' : (st == null ? g : st.apply(g)));
+    }
+    return out.toString().trimRight();
   }
 
   /// Draws one series as Braille dots, at 2× the horizontal and 4× the vertical
@@ -338,29 +445,9 @@ class LineChart implements Renderable {
 
   /// A line captioning the two ends of the x axis.
   ///
-  /// Indented to line up under the plot area rather than the y gutter. The gutter is
-  /// read back from the rendered axis row — the frame already decided how wide it is,
-  /// and deriving it a second time is how the two drift apart.
-  ///
-  /// **The row is stripped of escape sequences before it is scanned.** With colour on,
-  /// the axis row begins with an SGR sequence, and counting its characters as gutter
-  /// made the caption land in a different column than it did in the plain render —
-  /// which is the exact failure this package's cell-grid design exists to prevent,
-  /// and which a colour-equivalence test caught.
-  String _captionLine(
-    (String, String) caption,
-    int totalWidth,
-    List<String> lines,
-  ) {
-    final axisRow = stripAnsi(lines.last);
-    var gutter = 0;
-    while (gutter < axisRow.length &&
-        axisRow[gutter] != theme.charset.axisOrigin &&
-        axisRow[gutter] != theme.charset.horizontal) {
-      gutter++;
-    }
-    if (gutter >= axisRow.length) gutter = 0;
-
+  /// Indented to line up under the plot area rather than the y gutter — see
+  /// [_gutter].
+  String _captionLine((String, String) caption, int totalWidth, int gutter) {
     final room = totalWidth - gutter;
     final measure = theme.width;
     var left = caption.$1;

@@ -149,6 +149,153 @@ void main() {
     });
   });
 
+  group('sparkline · per-point styles', () {
+    const a = AnsiStyle.of(AnsiColor.cyan);
+    const b = AnsiStyle.of(AnsiColor.yellow);
+    final values = [for (var i = 0; i < 12; i++) 12 - i];
+
+    test('colour changes no geometry', () {
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [for (var i = 0; i < 12; i++) i < 6 ? a : b],
+      );
+      expect(stripAnsi(styled), sparkline(values));
+    });
+
+    test('plain theme ignores styles entirely', () {
+      expect(
+        sparkline(values, styles: [for (var i = 0; i < 12; i++) a]),
+        sparkline(values),
+      );
+    });
+
+    test('one escape per run, not per character', () {
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [for (var i = 0; i < 12; i++) i < 6 ? a : b],
+      );
+      final plain = sparkline(values);
+      expect(
+        styled,
+        '${a.apply(plain.substring(0, 6))}${b.apply(plain.substring(6))}',
+      );
+    });
+
+    test('null entries fall back to style', () {
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        style: b,
+        styles: [a, null, null, a],
+      );
+      final plain = sparkline([1, 2, 3, 4]);
+      expect(
+        styled,
+        '${a.apply(plain[0])}${b.apply(plain.substring(1, 3))}'
+        '${a.apply(plain[3])}',
+      );
+    });
+
+    test('a resampled column takes its majority style', () {
+      // 12 values into 4 columns of 3: a a b | b b b | a b b | a a a
+      final styles = [a, a, b, b, b, b, a, b, b, a, a, a];
+      final styled = sparkline(
+        values,
+        width: 4,
+        theme: ChartTheme.colorful,
+        styles: styles,
+      );
+      final plain = sparkline(values, width: 4);
+      expect(
+        styled,
+        '${a.apply(plain[0])}${b.apply(plain.substring(1, 3))}'
+        '${a.apply(plain[3])}',
+      );
+    });
+
+    test('a tie goes to the later style', () {
+      // 4 values into 2 columns: a b | b a
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        width: 2,
+        theme: ChartTheme.colorful,
+        styles: [a, b, b, a],
+      );
+      final plain = sparkline([1, 2, 3, 4], width: 2);
+      expect(styled, '${b.apply(plain[0])}${a.apply(plain[1])}');
+    });
+
+    test('a stretched series takes the nearest sample', () {
+      final styled = sparkline(
+        [1, 2],
+        width: 4,
+        theme: ChartTheme.colorful,
+        styles: [a, b],
+      );
+      final plain = sparkline([1, 2], width: 4);
+      expect(
+        styled,
+        '${a.apply(plain.substring(0, 2))}${b.apply(plain.substring(2))}',
+      );
+    });
+
+    test('styles must match the values one for one', () {
+      expect(() => sparkline([1, 2, 3], styles: [a]), throwsArgumentError);
+      expect(
+        () => sparkline([1, 2, 3], width: 10, styles: [a, b]),
+        throwsArgumentError,
+        reason: 'checked against the values, not the width',
+      );
+    });
+
+    test('a gap keeps its blank and its column, styled or not', () {
+      final values = [1, 2, null, null, 5, 6];
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [a, a, b, b, b, b],
+      );
+      expect(stripAnsi(styled), sparkline(values));
+      expect(stripAnsi(styled).length, values.length);
+    });
+
+    test('works with any charset — ascii stays ascii after stripping', () {
+      final theme = ChartTheme.ascii.copyWith(color: true);
+      final styled = sparkline(
+        values,
+        theme: theme,
+        styles: [for (var i = 0; i < 12; i++) i.isEven ? a : b],
+      );
+      final plain = stripAnsi(styled);
+      expect(plain, sparkline(values, theme: ChartTheme.ascii));
+      expect(plain.codeUnits.every((u) => u < 128), isTrue);
+    });
+
+    test('equal neighbouring styles are one run however they were built', () {
+      // Two separately constructed but equal styles must coalesce: the run
+      // check is by value, not identity.
+      const a2 = AnsiStyle(foreground: AnsiColor.cyan);
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        styles: [a, a2, a, a2],
+      );
+      expect('\x1b'.allMatches(styled).length, 2, reason: 'one on, one reset');
+    });
+
+    test('an explicit none matches an unstyled run beside it', () {
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        styles: [AnsiStyle.none, null, null, a],
+      );
+      final plain = sparkline([1, 2, 3, 4]);
+      expect(styled, '${plain.substring(0, 3)}${a.apply(plain[3])}');
+    });
+  });
+
   group('SparklineGroup', () {
     const series = [
       Series([1, 2, 3, 4, 5], label: 'loss'),

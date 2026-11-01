@@ -52,7 +52,7 @@ void main() {
 | **Grids** | `Heatmap`, `CalendarHeatmap` |
 | **Layout** | `Panel`, `Dashboard`, `Table`, `rule`, `hstack`, `vstack` |
 | **Live data** | `RingSeries` |
-| **Annotations** | `ReferenceLine`, `EventMarker` |
+| **Annotations** | `ReferenceLine`, `EventMarker`, `ChartStrip` |
 
 Run `dart run example/console_charts_example.dart` for a gallery of all of them.
 
@@ -163,6 +163,41 @@ the chart is resampled to a different width, and it draws only into empty cells 
 never erases the series. `xCaption` labels the two ends of an index axis, which is the
 only place an index axis is meaningful — spread tick labels would imply the samples
 are evenly spaced in time.
+
+## Regimes: which conditions drew which stretch
+
+A run that alternates between two modes — two optimizers, a primary and a fallback —
+needs more than the curve: a bend that lines up with a change of mode is explained,
+one that does not is a finding. `ChartStrip` draws one row under the x axis, one glyph
+per data point, aligned column for column with the curve:
+
+```dart
+LineChart.of(
+  loss,
+  width: 40, height: 8,
+  xCaption: ('blk 0', 'blk 11'),
+  strip: ChartStrip(regime, label: 'opt'),  // '─' or '█' per point
+);
+```
+
+```text
+7.0 ┤
+    │
+6.5 ┤───╮
+    │   ╰────╮ ╭────────╮
+6.0 ┤        ╰─╯        ╰──────╮
+    │                          ╰────────
+5.5 ┤
+    ┼───────────────────────────────────
+ opt ───────────██████████─────────█████
+    blk 0                         blk 11
+```
+
+Regimes are told apart by **glyph**, so the strip reads in a log file; `styles:` adds
+colour on top under a colour theme. `sparkline(values, styles: [...])` does the same
+for one line, colouring each point by its regime. Both resample with
+`resampleCategories`: a column takes the regime most of its points came from, so a
+stint shorter than half a column can vanish at a narrow width.
 
 ## Live data
 
