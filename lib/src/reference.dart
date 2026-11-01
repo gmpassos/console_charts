@@ -143,3 +143,41 @@ class EventMarker {
     }
   }
 }
+
+/// A one-row band under a chart's x axis, saying which *regime* each stretch of
+/// the series came from.
+///
+/// ```text
+///  6.6 ┤╮
+///  6.2 ┤╰──╮    ╭╮
+///  5.9 ┼───╰────╯╰─────
+/// mode  ────████──███──
+///       blk 0     blk 40
+/// ```
+///
+/// A curve shows *what* happened; a strip shows *under which conditions*. A
+/// training run alternating two optimizers, a service flipping between primary
+/// and fallback: a bend that lines up with a change of regime is explained, and
+/// one that does not is a finding. [EventMarker] marks an instant; a strip marks
+/// a duration, which is what a regime has.
+///
+/// One [glyphs] entry per data point, parallel to the series (null draws
+/// nothing). Mapped onto the plot's columns by [resampleCategories], the same
+/// column boundaries the series itself is resampled by, so the strip stays
+/// aligned with the curve above it at any width. Distinct glyphs, not only
+/// colours, carry the regimes, so a strip still reads in a log file; [styles]
+/// adds colour on top under a colour theme.
+class ChartStrip {
+  /// Creates a strip with one glyph per data point.
+  const ChartStrip(this.glyphs, {this.styles, this.label});
+
+  /// One single-column glyph per data point, or null for no mark.
+  final List<String?> glyphs;
+
+  /// Optional colour per data point, parallel to [glyphs].
+  final List<AnsiStyle?>? styles;
+
+  /// A caption in the y-axis gutter, right-aligned against the plot. Cut to
+  /// fit, and omitted when the chart has no gutter.
+  final String? label;
+}

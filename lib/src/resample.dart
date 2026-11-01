@@ -166,6 +166,52 @@ List<double?> resample(
   ).map((s) => s.value(mode)).toList(growable: false);
 }
 
+/// Fits a series of *categories* — anything with `==` — to [columns], by the same
+/// column boundaries [resample] uses for numbers, so the two stay aligned.
+///
+/// A category cannot be averaged, so a bucket takes its **majority**: the value
+/// most of its samples carry, ties to the later one (a column that ends in a
+/// change shows what it changed to). With fewer values than columns and
+/// [stretch] on, each column takes its nearest value, matching
+/// [interpolateToColumns]. A run shorter than half a column can vanish; that is
+/// the cost of drawing what mostly happened rather than one outlier.
+List<T> resampleCategories<T>(
+  List<T> values,
+  int columns, {
+  bool stretch = true,
+}) {
+  final n = values.length;
+  if (columns <= 0 || n == 0) return <T>[];
+  if (n == columns) return List<T>.of(values);
+  if (stretch && n < columns) {
+    return [
+      for (var c = 0; c < columns; c++)
+        values[columns == 1 ? 0 : (c * (n - 1) / (columns - 1)).round()],
+    ];
+  }
+  return [
+    for (var c = 0; c < columns; c++)
+      _majority(values, (c * n) ~/ columns, ((c + 1) * n) ~/ columns),
+  ];
+}
+
+T _majority<T>(List<T> values, int start, int end) {
+  if (end <= start) end = start + 1;
+  final counts = <T, int>{};
+  var best = values[start];
+  var bestCount = 0;
+  for (var i = start; i < end; i++) {
+    final v = values[i];
+    final k = (counts[v] ?? 0) + 1;
+    counts[v] = k;
+    if (k >= bestCount) {
+      best = v;
+      bestCount = k;
+    }
+  }
+  return best;
+}
+
 /// Spreads [values] across [columns] by linear interpolation.
 ///
 /// Used when a series is shorter than the space available, so a line fills the

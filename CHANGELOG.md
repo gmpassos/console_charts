@@ -1,3 +1,30 @@
+## 0.2.1
+
+Two ways to show *which regime* produced each stretch of a series — a training
+run alternating two optimizers, a service flipping to a fallback — so a bend that
+lines up with a change of regime reads as explained.
+
+**A regime strip under a line chart** — `LineChart(strip: ChartStrip(glyphs,
+styles: …, label: 'mode'))`. One row between the x axis and its caption, one
+glyph per data point, aligned column for column with the curve at any width and
+labelled in the y gutter. Distinct glyphs carry the regimes, so it still reads in
+a log file; `styles` adds colour under a colour theme without moving a column.
+Where `EventMarker` marks an instant, a strip marks a duration.
+
+**`resampleCategories`** — fits a series of categories to a width by the same
+column boundaries `resample` uses for numbers, so the two stay aligned. A
+category cannot be averaged, so a bucket takes its majority, ties to the later
+value; a stretched series takes the nearest value. Used by both features here.
+
+**Per-point sparkline colour** — `sparkline(values, styles: [...])`, one
+`AnsiStyle?` per value, null falling back to `style`. For a series whose samples
+come from different regimes — a training run alternating two optimizers — where
+which regime drew a stretch of the curve matters as much as its shape. A resampled
+column takes the style most of its samples carry, ties to the later one; a
+stretched series takes its nearest sample's. Runs of one style share one escape.
+Colour-only: stripping the escapes reproduces the plain line exactly, and under a
+theme without colour the output is byte-identical to before.
+
 ## 0.2.0
 
 Five features, every one of them from actually using 0.1.0 to chart a training run

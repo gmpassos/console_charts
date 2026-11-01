@@ -82,7 +82,7 @@ export 'src/layout.dart'
         rule,
         vstack;
 export 'src/plot.dart' show Plot, lineGlyphs;
-export 'src/reference.dart' show EventMarker, ReferenceLine;
+export 'src/reference.dart' show ChartStrip, EventMarker, ReferenceLine;
 export 'src/ring_series.dart' show RingDecimation, RingSeries;
 export 'src/plot_frame.dart' show AxisInsets, Axes, levelsFor, renderPlotFrame;
 export 'src/renderable.dart' show Renderable;
@@ -94,7 +94,8 @@ export 'src/resample.dart'
         bucketSamples,
         interpolateToColumns,
         largestTriangleThreeBuckets,
-        resample;
+        resample,
+        resampleCategories;
 export 'src/scale.dart'
     show
         AxisMode,

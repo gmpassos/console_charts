@@ -149,6 +149,103 @@ void main() {
     });
   });
 
+  group('sparkline · per-point styles', () {
+    const a = AnsiStyle.of(AnsiColor.cyan);
+    const b = AnsiStyle.of(AnsiColor.yellow);
+    final values = [for (var i = 0; i < 12; i++) 12 - i];
+
+    test('colour changes no geometry', () {
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [for (var i = 0; i < 12; i++) i < 6 ? a : b],
+      );
+      expect(stripAnsi(styled), sparkline(values));
+    });
+
+    test('plain theme ignores styles entirely', () {
+      expect(
+        sparkline(values, styles: [for (var i = 0; i < 12; i++) a]),
+        sparkline(values),
+      );
+    });
+
+    test('one escape per run, not per character', () {
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [for (var i = 0; i < 12; i++) i < 6 ? a : b],
+      );
+      final plain = sparkline(values);
+      expect(
+        styled,
+        '${a.apply(plain.substring(0, 6))}${b.apply(plain.substring(6))}',
+      );
+    });
+
+    test('null entries fall back to style', () {
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        style: b,
+        styles: [a, null, null, a],
+      );
+      final plain = sparkline([1, 2, 3, 4]);
+      expect(
+        styled,
+        '${a.apply(plain[0])}${b.apply(plain.substring(1, 3))}'
+        '${a.apply(plain[3])}',
+      );
+    });
+
+    test('a resampled column takes its majority style', () {
+      // 12 values into 4 columns of 3: a a b | b b b | a b b | a a a
+      final styles = [a, a, b, b, b, b, a, b, b, a, a, a];
+      final styled = sparkline(
+        values,
+        width: 4,
+        theme: ChartTheme.colorful,
+        styles: styles,
+      );
+      final plain = sparkline(values, width: 4);
+      expect(
+        styled,
+        '${a.apply(plain[0])}${b.apply(plain.substring(1, 3))}'
+        '${a.apply(plain[3])}',
+      );
+    });
+
+    test('a tie goes to the later style', () {
+      // 4 values into 2 columns: a b | b a
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        width: 2,
+        theme: ChartTheme.colorful,
+        styles: [a, b, b, a],
+      );
+      final plain = sparkline([1, 2, 3, 4], width: 2);
+      expect(styled, '${b.apply(plain[0])}${a.apply(plain[1])}');
+    });
+
+    test('a stretched series takes the nearest sample', () {
+      final styled = sparkline(
+        [1, 2],
+        width: 4,
+        theme: ChartTheme.colorful,
+        styles: [a, b],
+      );
+      final plain = sparkline([1, 2], width: 4);
+      expect(
+        styled,
+        '${a.apply(plain.substring(0, 2))}${b.apply(plain.substring(2))}',
+      );
+    });
+
+    test('styles must match the values one for one', () {
+      expect(() => sparkline([1, 2, 3], styles: [a]), throwsArgumentError);
+    });
+  });
+
   group('SparklineGroup', () {
     const series = [
       Series([1, 2, 3, 4, 5], label: 'loss'),

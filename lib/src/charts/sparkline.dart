@@ -25,6 +25,24 @@ import '../width.dart';
 /// reads as a gap rather than as a zero. [min] and [max] pin the scale, which is
 /// what makes two sparklines comparable; without them each scales to its own range
 /// and equal-looking lines can mean very different numbers.
+///
+/// [styles], when given, colours the line **per point**: one entry per value,
+/// parallel to [values], null meaning "use [style]". It is for a series whose
+/// samples come from different regimes — a training run alternating two
+/// optimizers, a service switching between primary and fallback — where which
+/// regime produced a stretch of the curve matters as much as its shape.
+///
+/// When [width] resamples the series, each column takes the style most of its
+/// samples carry (ties go to the later one, so a column that ends in a regime
+/// change shows the regime it changed to). This is a *majority*, deliberately:
+/// a column is coloured by what mostly produced it, not by one sample that
+/// happened to be extreme. A regime shorter than half a column can therefore
+/// vanish at a narrow width; widen the chart if such stints matter. When the
+/// series is stretched to fill more columns than it has values, each column
+/// takes the style of its nearest sample.
+///
+/// Like every colour here, [styles] only renders under a theme with colour on;
+/// under [ChartTheme.plain] the output is byte-identical to the unstyled line.
 String sparkline(
   List<num?> values, {
   ChartTheme theme = ChartTheme.plain,
@@ -33,7 +51,15 @@ String sparkline(
   int? width,
   ResampleMode mode = ResampleMode.mean,
   AnsiStyle? style,
+  List<AnsiStyle?>? styles,
 }) {
+  if (styles != null && styles.length != values.length) {
+    throw ArgumentError.value(
+      styles.length,
+      'styles',
+      'must have one entry per value (${values.length})',
+    );
+  }
   if (values.isEmpty) return '';
   final samples = width == null
       ? values.map((v) => v?.toDouble()).toList(growable: false)
@@ -51,14 +77,31 @@ String sparkline(
     max: max,
   );
   final ramp = theme.charset.verticalRamp;
-  final out = StringBuffer();
-  for (final sample in samples) {
-    final t = scale.normalize(sample);
-    out.write(t == null ? theme.charset.blank : levelGlyph(ramp, t));
-  }
-  final text = out.toString();
+  final glyphs = [
+    for (final sample in samples)
+      switch (scale.normalize(sample)) {
+        null => theme.charset.blank,
+        final t => levelGlyph(ramp, t),
+      },
+  ];
   final effective = style ?? AnsiStyle.none;
-  return theme.color ? effective.apply(text) : text;
+  if (!theme.color) return glyphs.join();
+  if (styles == null) return effective.apply(glyphs.join());
+
+  final perColumn = width == null
+      ? styles
+      : resampleCategories(styles, glyphs.length);
+  // Runs of one style share one escape, so a two-regime line costs a handful of
+  // sequences rather than one per character.
+  final out = StringBuffer();
+  var runStart = 0;
+  for (var c = 1; c <= glyphs.length; c++) {
+    final here = perColumn[runStart] ?? effective;
+    if (c < glyphs.length && (perColumn[c] ?? effective) == here) continue;
+    out.write(here.apply(glyphs.sublist(runStart, c).join()));
+    runStart = c;
+  }
+  return out.toString();
 }
 
 /// Several labelled sparklines, aligned into a block.

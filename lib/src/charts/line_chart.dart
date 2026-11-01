@@ -65,6 +65,7 @@ class LineChart implements Renderable {
     this.markers = const [],
     this.xCaption,
     this.lineStyle = LineStyle.glyph,
+    this.strip,
   });
 
   /// Convenience for a single unnamed series.
@@ -87,6 +88,7 @@ class LineChart implements Renderable {
     List<EventMarker> markers = const [],
     (String, String)? xCaption,
     LineStyle lineStyle = LineStyle.glyph,
+    ChartStrip? strip,
   }) : this(
          [Series(values)],
          width: width,
@@ -106,6 +108,7 @@ class LineChart implements Renderable {
          markers: markers,
          xCaption: xCaption,
          lineStyle: lineStyle,
+         strip: strip,
        );
 
   /// The series to draw. Each gets its own colour from the theme's palette.
@@ -194,6 +197,11 @@ class LineChart implements Renderable {
   /// loop is how a shadowed variable turns into a silent bug.
   final LineStyle lineStyle;
 
+  /// A band under the x axis marking which regime each stretch of the series
+  /// came from — see [ChartStrip]. Its glyphs are indexed like the longest
+  /// series. Drawn between the axis and the [xCaption].
+  final ChartStrip? strip;
+
   @override
   List<String> renderLines() {
     if (series.isEmpty) return const [];
@@ -224,6 +232,7 @@ class LineChart implements Renderable {
           );
 
     final longest = series.fold(0, (m, s) => s.length > m ? s.length : m);
+    var plotWidth = 0;
 
     final lines = renderPlotFrame(
       width: w,
@@ -235,6 +244,7 @@ class LineChart implements Renderable {
       yScale: yScale,
       xScale: (plotWidth) => LinearScale.index(plotWidth, plotWidth),
       draw: (plot) {
+        plotWidth = plot.width;
         // References first, so a series drawn over one keeps the cell. A reference is
         // context; the data is the point.
         for (final reference in references) {
@@ -293,9 +303,71 @@ class LineChart implements Renderable {
       },
     );
 
+    if (lines.isEmpty) return lines;
+    // Read before the strip is appended: both it and the caption measure the
+    // gutter off the axis row, which must still be the last line.
+    final gutter = _gutter(lines);
+    final stripLine = strip == null || plotWidth <= 0
+        ? null
+        : _stripLine(strip!, gutter, plotWidth);
     final caption = xCaption;
-    if (caption == null || xLabels != null || lines.isEmpty) return lines;
-    return [...lines, _captionLine(caption, w, lines)];
+    return [
+      ...lines,
+      ?stripLine,
+      if (caption != null && xLabels == null) _captionLine(caption, w, gutter),
+    ];
+  }
+
+  /// The column the axis origin sits in — the y gutter's width.
+  ///
+  /// Read back from the rendered axis row — the frame already decided how wide
+  /// it is, and deriving it a second time is how the two drift apart.
+  ///
+  /// **The row is stripped of escape sequences before it is scanned.** With colour on,
+  /// the axis row begins with an SGR sequence, and counting its characters as gutter
+  /// made the caption land in a different column than it did in the plain render —
+  /// which is the exact failure this package's cell-grid design exists to prevent,
+  /// and which a colour-equivalence test caught.
+  int _gutter(List<String> lines) {
+    final axisRow = stripAnsi(lines.last);
+    var gutter = 0;
+    while (gutter < axisRow.length &&
+        axisRow[gutter] != theme.charset.axisOrigin &&
+        axisRow[gutter] != theme.charset.horizontal) {
+      gutter++;
+    }
+    return gutter >= axisRow.length ? 0 : gutter;
+  }
+
+  /// The [ChartStrip] row: its label in the gutter, then one glyph per plot
+  /// column, starting one past the axis origin where the plot itself starts.
+  String _stripLine(ChartStrip s, int gutter, int plotWidth) {
+    final measure = theme.width;
+    final label = s.label;
+    final String head;
+    if (label == null || gutter < 2) {
+      head = ' ' * (gutter + 1);
+    } else {
+      final fit = truncateToWidth(
+        label,
+        gutter - 1,
+        ellipsis: '',
+        width: measure,
+      );
+      // Right-aligned against the axis column, a space short of it.
+      head = '${' ' * (gutter - measure(fit))}$fit ';
+    }
+    final glyphs = resampleCategories(s.glyphs, plotWidth);
+    final styles = s.styles == null || !theme.color
+        ? null
+        : resampleCategories(s.styles!, plotWidth);
+    final out = StringBuffer(head);
+    for (var x = 0; x < glyphs.length; x++) {
+      final g = glyphs[x] ?? ' ';
+      final st = styles?[x];
+      out.write(st == null ? g : st.apply(g));
+    }
+    return out.toString().trimRight();
   }
 
   /// Draws one series as Braille dots, at 2× the horizontal and 4× the vertical
@@ -338,29 +410,9 @@ class LineChart implements Renderable {
 
   /// A line captioning the two ends of the x axis.
   ///
-  /// Indented to line up under the plot area rather than the y gutter. The gutter is
-  /// read back from the rendered axis row — the frame already decided how wide it is,
-  /// and deriving it a second time is how the two drift apart.
-  ///
-  /// **The row is stripped of escape sequences before it is scanned.** With colour on,
-  /// the axis row begins with an SGR sequence, and counting its characters as gutter
-  /// made the caption land in a different column than it did in the plain render —
-  /// which is the exact failure this package's cell-grid design exists to prevent,
-  /// and which a colour-equivalence test caught.
-  String _captionLine(
-    (String, String) caption,
-    int totalWidth,
-    List<String> lines,
-  ) {
-    final axisRow = stripAnsi(lines.last);
-    var gutter = 0;
-    while (gutter < axisRow.length &&
-        axisRow[gutter] != theme.charset.axisOrigin &&
-        axisRow[gutter] != theme.charset.horizontal) {
-      gutter++;
-    }
-    if (gutter >= axisRow.length) gutter = 0;
-
+  /// Indented to line up under the plot area rather than the y gutter — see
+  /// [_gutter].
+  String _captionLine((String, String) caption, int totalWidth, int gutter) {
     final room = totalWidth - gutter;
     final measure = theme.width;
     var left = caption.$1;

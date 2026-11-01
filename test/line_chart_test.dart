@@ -452,4 +452,99 @@ void main() {
       }
     });
   });
+
+  group('resampleCategories', () {
+    test('a bucket takes its majority, ties to the later value', () {
+      expect(
+        resampleCategories(['a', 'a', 'b', 'b', 'b', 'b', 'a', 'b', 'b'], 3),
+        ['a', 'b', 'b'],
+      );
+      expect(resampleCategories(['a', 'b', 'b', 'a'], 2), ['b', 'a']);
+    });
+
+    test('a stretched series takes the nearest value', () {
+      expect(resampleCategories(['a', 'b'], 4), ['a', 'a', 'b', 'b']);
+    });
+
+    test('same length is identity; empty in, empty out', () {
+      expect(resampleCategories(['a', null, 'b'], 3), ['a', null, 'b']);
+      expect(resampleCategories(<String>[], 5), isEmpty);
+      expect(resampleCategories(['a'], 0), isEmpty);
+    });
+  });
+
+  group('LineChart · strip', () {
+    final values = [for (var i = 0; i < 40; i++) 10.0 - i / 8];
+    final glyphs = [for (var i = 0; i < 40; i++) i >= 10 && i < 20 ? '█' : '─'];
+
+    List<String> render({ChartStrip? strip, ChartTheme? theme}) => LineChart.of(
+      values,
+      width: 50,
+      height: 6,
+      theme: theme ?? ChartTheme.plain,
+      xCaption: ('blk 0', 'blk 39'),
+      strip: strip,
+    ).renderLines();
+
+    test('sits between the axis and the caption, adding one row', () {
+      final plain = render();
+      final strip = render(strip: ChartStrip(glyphs, label: 'mode'));
+      expect(strip, hasLength(plain.length + 1));
+      expect(
+        strip.sublist(0, plain.length - 1),
+        plain.sublist(0, plain.length - 1),
+      );
+      expect(strip.last, plain.last, reason: 'the caption is unchanged');
+      // The label sits in the gutter, cut to fit it — this gutter is 3 wide,
+      // so 'mode' becomes 'mo' plus the space before the plot.
+      final origin = plain[plain.length - 2].indexOf('┼');
+      final head = strip[plain.length - 1].substring(0, origin + 1);
+      expect(head.trim(), 'mo');
+      expect(head, endsWith(' '));
+    });
+
+    test('starts one column past the axis origin, where the plot starts', () {
+      final lines = render(strip: ChartStrip(glyphs));
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow.substring(0, origin + 1).trim(), isEmpty);
+      expect(stripRow[origin + 1], '─');
+      // The plot is 40 points over the plot's columns: 10..20 of 40 is the
+      // second quarter, and it shows up there, not in the gutter or at the end.
+      final band = stripRow.substring(origin + 1);
+      final first = band.indexOf('█');
+      final last = band.lastIndexOf('█');
+      expect(first / band.length, closeTo(0.25, 0.05));
+      expect((last + 1) / band.length, closeTo(0.5, 0.05));
+    });
+
+    test('colour adds escapes and changes no geometry', () {
+      final strip = ChartStrip(
+        glyphs,
+        styles: [
+          for (final g in glyphs)
+            AnsiStyle.of(g == '█' ? AnsiColor.yellow : AnsiColor.cyan),
+        ],
+        label: 'mode',
+      );
+      final coloured = render(strip: strip, theme: ChartTheme.colorful);
+      expect(coloured.join('\n'), contains('\x1b[33m█'));
+      expect(
+        coloured.map(stripAnsi).toList(),
+        render(strip: ChartStrip(glyphs, label: 'mode')),
+      );
+    });
+
+    test('a label wider than the gutter is cut', () {
+      final lines = render(
+        strip: ChartStrip(glyphs, label: 'a very long label'),
+      );
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final stripRow = lines[lines.length - 2];
+      expect(stripRow[origin], ' ', reason: 'a space before the plot column');
+      expect(stripRow[origin + 1], '─');
+    });
+  });
 }
