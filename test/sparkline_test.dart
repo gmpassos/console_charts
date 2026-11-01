@@ -243,6 +243,56 @@ void main() {
 
     test('styles must match the values one for one', () {
       expect(() => sparkline([1, 2, 3], styles: [a]), throwsArgumentError);
+      expect(
+        () => sparkline([1, 2, 3], width: 10, styles: [a, b]),
+        throwsArgumentError,
+        reason: 'checked against the values, not the width',
+      );
+    });
+
+    test('a gap keeps its blank and its column, styled or not', () {
+      final values = [1, 2, null, null, 5, 6];
+      final styled = sparkline(
+        values,
+        theme: ChartTheme.colorful,
+        styles: [a, a, b, b, b, b],
+      );
+      expect(stripAnsi(styled), sparkline(values));
+      expect(stripAnsi(styled).length, values.length);
+    });
+
+    test('works with any charset — ascii stays ascii after stripping', () {
+      final theme = ChartTheme.ascii.copyWith(color: true);
+      final styled = sparkline(
+        values,
+        theme: theme,
+        styles: [for (var i = 0; i < 12; i++) i.isEven ? a : b],
+      );
+      final plain = stripAnsi(styled);
+      expect(plain, sparkline(values, theme: ChartTheme.ascii));
+      expect(plain.codeUnits.every((u) => u < 128), isTrue);
+    });
+
+    test('equal neighbouring styles are one run however they were built', () {
+      // Two separately constructed but equal styles must coalesce: the run
+      // check is by value, not identity.
+      const a2 = AnsiStyle(foreground: AnsiColor.cyan);
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        styles: [a, a2, a, a2],
+      );
+      expect('\x1b'.allMatches(styled).length, 2, reason: 'one on, one reset');
+    });
+
+    test('an explicit none matches an unstyled run beside it', () {
+      final styled = sparkline(
+        [1, 2, 3, 4],
+        theme: ChartTheme.colorful,
+        styles: [AnsiStyle.none, null, null, a],
+      );
+      final plain = sparkline([1, 2, 3, 4]);
+      expect(styled, '${plain.substring(0, 3)}${a.apply(plain[3])}');
     });
   });
 

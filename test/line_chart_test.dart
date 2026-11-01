@@ -546,5 +546,100 @@ void main() {
       expect(stripRow[origin], ' ', reason: 'a space before the plot column');
       expect(stripRow[origin + 1], '─');
     });
+
+    test('without a caption the strip is the last row', () {
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      final plain = LineChart.of(values, width: 50, height: 6).renderLines();
+      expect(lines, hasLength(plain.length + 1));
+      expect(lines.last, contains('█'));
+    });
+
+    test('with spread x labels the strip still sits under the axis', () {
+      final labels = ['a', 'b', 'c', 'd'];
+      final lines = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        xLabels: labels,
+        strip: ChartStrip(glyphs),
+      ).renderLines();
+      final plain = LineChart.of(
+        values,
+        width: 50,
+        height: 6,
+        xLabels: labels,
+      ).renderLines();
+      // The labels row is the frame's own last line; the strip follows it.
+      expect(lines, hasLength(plain.length + 1));
+      expect(lines.sublist(0, plain.length), plain);
+      expect(lines.last, contains('█'));
+    });
+
+    test('a null glyph leaves its columns blank', () {
+      final sparse = [for (var i = 0; i < 40; i++) i < 20 ? null : '█'];
+      final lines = render(strip: ChartStrip(sparse));
+      final axisRow = lines[lines.length - 3];
+      final origin = axisRow.indexOf('┼');
+      final band = lines[lines.length - 2].substring(origin + 1);
+      final firstMark = band.indexOf('█');
+      expect(band.substring(0, firstMark).trim(), isEmpty);
+      expect(firstMark / 49, closeTo(0.5, 0.06));
+    });
+
+    test('stays aligned when the series is stretched across the plot', () {
+      // 4 points over ~45 columns: the strip stretches the same way the
+      // line does, so the regime change lands where the curve's point does.
+      final lines = LineChart.of(
+        [4, 3, 2, 1],
+        width: 50,
+        height: 6,
+        strip: const ChartStrip(['─', '─', '█', '█']),
+      ).renderLines();
+      final axisRow = lines[lines.length - 2];
+      final origin = axisRow.indexOf('┼');
+      final band = lines.last.substring(origin + 1);
+      expect(band.indexOf('█') / band.length, closeTo(0.5, 0.05));
+    });
+  });
+
+  group('resampleCategories · alignment', () {
+    test('uses exactly the column boundaries bucketSamples uses', () {
+      // A uniform bucket's majority is its only value, so labelling every
+      // sample with its own bucket must give back the bucket indices — for any
+      // n and width where both shrink.
+      for (final n in [7, 10, 33, 100]) {
+        for (final columns in [1, 3, 7]) {
+          if (columns > n) continue;
+          final bucketOf = List<int>.filled(n, -1);
+          for (var c = 0; c < columns; c++) {
+            final start = (c * n) ~/ columns;
+            final end = ((c + 1) * n) ~/ columns;
+            for (var i = start; i < end; i++) {
+              bucketOf[i] = c;
+            }
+          }
+          expect(resampleCategories(bucketOf, columns), [
+            for (var c = 0; c < columns; c++) c,
+          ], reason: 'n=$n columns=$columns');
+          expect(bucketSamples(bucketOf, columns).map((s) => s.min), [
+            for (var c = 0; c < columns; c++) c,
+          ]);
+        }
+      }
+    });
+
+    test('without stretch, a short series is not interpolated', () {
+      expect(resampleCategories(['a', 'b'], 4, stretch: false), hasLength(4));
+      expect(resampleCategories(['a', 'b'], 1), ['b'], reason: 'tie: later');
+    });
+
+    test('null is a category like any other', () {
+      expect(resampleCategories([null, null, 'a'], 1), [null]);
+    });
   });
 }
